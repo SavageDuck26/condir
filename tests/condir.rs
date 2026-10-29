@@ -5,7 +5,9 @@ use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-use condir::{config_path, ensure_config_file, get_config_dir, make_config, pack_name};
+use condir::{
+    config_path, ensure_config_file, get_config_dir, make_config, make_pack_config, pack_name,
+};
 
 #[test]
 fn config_dir_matches_the_os() {
@@ -104,8 +106,8 @@ fn assert_child_passed(out: &Output) {
 }
 
 #[test]
-fn make_config_creates_the_file_in_the_os_folder() {
-    const NAME: &str = "make_config_creates_the_file_in_the_os_folder";
+fn make_pack_config_creates_the_file_in_the_os_folder() {
+    const NAME: &str = "make_pack_config_creates_the_file_in_the_os_folder";
 
     if !is_inner_run() {
         // Every OS gets its own scratch folder, so nothing lands in the real one.
@@ -123,17 +125,69 @@ fn make_config_creates_the_file_in_the_os_folder() {
         return;
     }
 
-    let path = make_config!("spm.blob").expect("the file should be created");
+    let path = make_pack_config!("spm.blob").expect("the file should be created");
 
     assert_eq!(
         path,
         config_path!("spm.blob").expect("the folder should resolve")
+    );
+    // With no parts named of your own, that is make_config! plus the package name.
+    assert_eq!(
+        path,
+        make_config!(pack_name!(), "spm.blob").expect("the file should be created")
     );
     assert!(path.starts_with(std::env::temp_dir()), "{}", path.display());
     assert!(path.ends_with("condir/spm.blob"), "{}", path.display());
     assert!(path.is_file(), "{}", path.display());
 
     fs::remove_file(&path).expect("the created file should be removable");
+}
+
+#[test]
+fn make_config_names_the_parts_the_caller_gives() {
+    const NAME: &str = "make_config_names_the_parts_the_caller_gives";
+
+    if !is_inner_run() {
+        // Every OS gets its own scratch folder, so nothing lands in the real one.
+        let home = scratch("home");
+        let out = rerun_with_env(
+            NAME,
+            &[
+                ("HOME", home.to_str()),
+                ("XDG_CONFIG_HOME", home.join("xdg").to_str()),
+                ("APPDATA", home.join("appdata").to_str()),
+            ],
+        );
+        assert_child_passed(&out);
+        fs::remove_dir_all(&home).expect("the scratch folder should be removable");
+        return;
+    }
+
+    // As many parts as you like, from the config dir down, and no package folder.
+    let nested =
+        make_config!("my_app", "profiles", "config.json").expect("the file should be created");
+
+    assert!(
+        nested.starts_with(std::env::temp_dir()),
+        "{}",
+        nested.display()
+    );
+    assert!(
+        nested.ends_with("my_app/profiles/config.json"),
+        "{}",
+        nested.display()
+    );
+    assert!(nested.is_file(), "{}", nested.display());
+
+    // One part on its own goes straight into the config folder.
+    let flat = make_config!("standalone.json").expect("the file should be created");
+    let dir = get_config_dir().expect("the folder should resolve");
+
+    assert_eq!(flat.parent(), Some(dir.as_path()));
+    assert!(flat.is_file(), "{}", flat.display());
+
+    fs::remove_file(&nested).expect("the created file should be removable");
+    fs::remove_file(&flat).expect("the created file should be removable");
 }
 
 #[test]

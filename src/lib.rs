@@ -11,7 +11,7 @@ macro_rules! pack_name {
     };
 }
 // =========================================================================================================
-// Just returns the config dir: nothing is created, use `make_config!` for that.
+// Just returns the config dir: nothing is created, use `make_pack_config!` for that.
 
 /// ```
 /// let path = condir::config_path!("settings.json").unwrap();
@@ -24,11 +24,40 @@ macro_rules! config_path {
     };
 }
 // =========================================================================================================
-// If called in an app named "crypt", then make_config!("config.json") would write it to configdir/crypt/config.json
+// Names the folders yourself from the config dir down, instead of using the package name:
+// make_config!("crypt", "config.json") writes configdir/crypt/config.json and
+// make_config!("config.json") writes configdir/config.json.
+/// ```no_run
+/// # fn main() -> std::io::Result<()> {
+/// let made = condir::make_config!("crypt", "profiles", "config.json")?;
+/// println!("{}", made.display());
+/// # Ok(())
+/// # }
+/// ```
 #[macro_export]
 macro_rules! make_config {
+    ($($part:expr),+ $(,)?) => {
+        $crate::get_config_dir()
+            .map(|mut dir| {
+                $(dir.push($part);)+
+                dir
+            })
+            .and_then($crate::ensure_config_file)
+    };
+}
+// =========================================================================================================
+// If called in an app named "crypt", then make_pack_config!("config.json") would write it to configdir/crypt/config.json
+/// ```no_run
+/// # fn main() -> std::io::Result<()> {
+/// let made = condir::make_pack_config!("config.json")?;
+/// println!("{}", made.display());
+/// # Ok(())
+/// # }
+/// ```
+#[macro_export]
+macro_rules! make_pack_config {
     ($file:expr $(,)?) => {
-        $crate::config_path!($file).and_then($crate::ensure_config_file)
+        $crate::make_config!($crate::pack_name!(), $file)
     };
 }
 // =========================================================================================================
