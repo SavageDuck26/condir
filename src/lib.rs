@@ -1,7 +1,7 @@
 //! condir: the config folder for whatever package calls these macros.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 // =========================================================================================================
 // The package name that condir is being used in.
 #[macro_export]
@@ -24,25 +24,20 @@ macro_rules! config_path {
     };
 }
 // =========================================================================================================
-// Names the folders yourself from the config dir down, instead of using the package name:
-// make_config!("crypt", "config.json") writes configdir/crypt/config.json and
+// Takes one path and starts it in the config dir, so a leading slash is harmless:
+// make_config!("/crypt/config.json") writes configdir/crypt/config.json and
 // make_config!("config.json") writes configdir/config.json.
 /// ```no_run
 /// # fn main() -> std::io::Result<()> {
-/// let made = condir::make_config!("crypt", "profiles", "config.json")?;
+/// let made = condir::make_config!("/crypt/profiles/config.json")?;
 /// println!("{}", made.display());
 /// # Ok(())
 /// # }
 /// ```
 #[macro_export]
 macro_rules! make_config {
-    ($($part:expr),+ $(,)?) => {
-        $crate::get_config_dir()
-            .map(|mut dir| {
-                $(dir.push($part);)+
-                dir
-            })
-            .and_then($crate::ensure_config_file)
+    ($path:expr $(,)?) => {
+        $crate::make_config_at($path)
     };
 }
 // =========================================================================================================
@@ -57,7 +52,7 @@ macro_rules! make_config {
 #[macro_export]
 macro_rules! make_pack_config {
     ($file:expr $(,)?) => {
-        $crate::make_config!($crate::pack_name!(), $file)
+        $crate::make_config!(::std::path::Path::new($crate::pack_name!()).join($file))
     };
 }
 // =========================================================================================================
@@ -76,6 +71,22 @@ pub fn get_config_dir() -> io::Result<PathBuf> {
             _ => Ok(env_path("HOME")?.join(".config")),
         }
     }
+}
+
+/// Starts `path` in the config folder and creates it. Roots and prefixes are dropped, so
+/// the result always starts there, while a `..` still steps back out of it.
+#[doc(hidden)]
+pub fn make_config_at(path: impl AsRef<Path>) -> io::Result<PathBuf> {
+    let mut full = get_config_dir()?;
+
+    for part in path.as_ref().components() {
+        match part {
+            Component::RootDir | Component::Prefix(_) | Component::CurDir => {}
+            part => full.push(part.as_os_str()),
+        }
+    }
+
+    ensure_config_file(full)
 }
 
 /// Creates the parent folders if they are missing, touches the file, and hands the path back.

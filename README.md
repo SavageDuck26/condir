@@ -19,8 +19,8 @@ fn main() -> std::io::Result<()> {
     let path = make_pack_config!("settings.json")?;
     println!("created {}", path.display());
 
-    // Your own naming instead of the package name, as many parts as you like.
-    let path = make_config!("my_app", "profiles", "settings.json")?;
+    // A path of your own instead of the package name, read from the config dir down.
+    let path = make_config!("my_app/profiles/settings.json")?;
     println!("created {}", path.display());
     Ok(())
 }
@@ -34,7 +34,7 @@ fn main() -> std::io::Result<()> {
 | macOS | `~/Library/Application Support` | `HOME` |
 | Everything else | `$XDG_CONFIG_HOME`, else `~/.config` | `XDG_CONFIG_HOME`, `HOME` |
 
-The calling package's name is the folder inside that, so one crate cannot write into another one's space by accident. `make_config!` is the way out of that: name the parts yourself and it uses them instead.
+The calling package's name is the folder inside that, so one crate cannot write into another one's space by accident. `make_config!` is the way out of that: give it a path and it starts in the config folder instead.
 
 ## The package name
 
@@ -49,9 +49,8 @@ The calling package's name is the folder inside that, so one crate cannot write 
 |---|---|
 | `config_path!("file")` | the path under the package's folder. Nothing is created. |
 | `make_pack_config!("file")` | the same path, with the folders and the file created |
-| `make_config!("part", ...)` | your own parts under the config folder, folders and file created |
+| `make_config!("path")` | one path of your own, read from the config folder down, folders and file created |
 | `pack_name!()` | the calling package's name, as `&'static str` |
-| `get_config_dir()` | the system folder on its own, no package and no file |
-| `ensure_config_file(path)` | the helper the macros call, hidden from the docs |
+
 
 The three macros and the two functions all return `std::io::Result<PathBuf>`, so `?` works in a `main` that returns `Result`. Paths stay `PathBuf` and `OsString` the whole way, so a file name that is not valid UTF-8 survives intact. A variable that is missing or empty comes back as `NotFound` with a message that names it: `condir: APPDATA is not set`.

@@ -131,10 +131,11 @@ fn make_pack_config_creates_the_file_in_the_os_folder() {
         path,
         config_path!("spm.blob").expect("the folder should resolve")
     );
-    // With no parts named of your own, that is make_config! plus the package name.
+    // That is make_config! with the package name in front of the file.
     assert_eq!(
         path,
-        make_config!(pack_name!(), "spm.blob").expect("the file should be created")
+        make_config!(std::path::Path::new(pack_name!()).join("spm.blob"))
+            .expect("the file should be created")
     );
     assert!(path.starts_with(std::env::temp_dir()), "{}", path.display());
     assert!(path.ends_with("condir/spm.blob"), "{}", path.display());
@@ -144,8 +145,8 @@ fn make_pack_config_creates_the_file_in_the_os_folder() {
 }
 
 #[test]
-fn make_config_names_the_parts_the_caller_gives() {
-    const NAME: &str = "make_config_names_the_parts_the_caller_gives";
+fn make_config_starts_in_the_config_folder() {
+    const NAME: &str = "make_config_starts_in_the_config_folder";
 
     if !is_inner_run() {
         // Every OS gets its own scratch folder, so nothing lands in the real one.
@@ -163,31 +164,44 @@ fn make_config_names_the_parts_the_caller_gives() {
         return;
     }
 
-    // As many parts as you like, from the config dir down, and no package folder.
-    let nested =
-        make_config!("my_app", "profiles", "config.json").expect("the file should be created");
+    let dir = get_config_dir().expect("the folder should resolve");
 
+    // One path of your own, read from the config folder down.
+    let nested = make_config!("my_app/profiles/config.json").expect("the file should be created");
+
+    assert_eq!(
+        nested,
+        dir.join("my_app").join("profiles").join("config.json")
+    );
     assert!(
         nested.starts_with(std::env::temp_dir()),
         "{}",
         nested.display()
     );
-    assert!(
-        nested.ends_with("my_app/profiles/config.json"),
-        "{}",
-        nested.display()
-    );
     assert!(nested.is_file(), "{}", nested.display());
 
-    // One part on its own goes straight into the config folder.
+    // A leading slash is harmless, the config folder is still where it starts.
+    let rooted = make_config!("/my_app/config.json").expect("the file should be created");
+
+    assert_eq!(rooted, dir.join("my_app").join("config.json"));
+    assert!(rooted.is_file(), "{}", rooted.display());
+
+    // A file name on its own goes straight into the config folder.
     let flat = make_config!("standalone.json").expect("the file should be created");
-    let dir = get_config_dir().expect("the folder should resolve");
 
     assert_eq!(flat.parent(), Some(dir.as_path()));
     assert!(flat.is_file(), "{}", flat.display());
 
-    fs::remove_file(&nested).expect("the created file should be removable");
-    fs::remove_file(&flat).expect("the created file should be removable");
+    // A Path works as well as a string.
+    let typed = make_config!(std::path::Path::new("typed").join("config.json"))
+        .expect("the file should be created");
+
+    assert_eq!(typed, dir.join("typed").join("config.json"));
+    assert!(typed.is_file(), "{}", typed.display());
+
+    for made in [nested, rooted, flat, typed] {
+        fs::remove_file(made).expect("the created file should be removable");
+    }
 }
 
 #[test]
