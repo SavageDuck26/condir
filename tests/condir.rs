@@ -48,7 +48,7 @@ fn config_path_uses_the_calling_package_name() {
 
 #[test]
 fn ensure_config_file_creates_folders_and_the_file() {
-    let base = std::env::temp_dir().join(format!("condir-test-{}", std::process::id()));
+    let base = scratch("ensure-config-file");
     let path = base.join("nested").join("spm.blob");
 
     let made = ensure_config_file(path.clone()).expect("creating the file should work");
@@ -63,6 +63,13 @@ fn config_path_appends_the_file_name() {
     let path = config_path!("settings.json").expect("the folder should resolve");
 
     assert!(path.ends_with("settings.json"), "{}", path.display());
+
+    // A leading slash is not needed and changes nothing, it cannot step out of the
+    // package folder into another crate's.
+    assert_eq!(
+        config_path!("/settings.json").expect("the folder should resolve"),
+        path
+    );
 }
 
 /// Set by `rerun_with_env` in the child, so the child takes the inner path and
@@ -73,6 +80,8 @@ fn is_inner_run() -> bool {
     std::env::var_os(INNER_MARKER).is_some()
 }
 
+/// A scratch folder of its own for one test, so two tests running side by side never
+/// clean up each other's.
 fn scratch(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("condir-test-{}-{name}", std::process::id()))
 }
@@ -111,7 +120,7 @@ fn make_pack_config_creates_the_file_in_the_os_folder() {
 
     if !is_inner_run() {
         // Every OS gets its own scratch folder, so nothing lands in the real one.
-        let home = scratch("home");
+        let home = scratch(NAME);
         let out = rerun_with_env(
             NAME,
             &[
@@ -150,7 +159,7 @@ fn make_config_starts_in_the_config_folder() {
 
     if !is_inner_run() {
         // Every OS gets its own scratch folder, so nothing lands in the real one.
-        let home = scratch("home");
+        let home = scratch(NAME);
         let out = rerun_with_env(
             NAME,
             &[
@@ -178,6 +187,9 @@ fn make_config_starts_in_the_config_folder() {
         "{}",
         nested.display()
     );
+    // Every part but the last one becomes a folder.
+    assert!(dir.join("my_app").is_dir(), "{}", dir.display());
+    assert!(dir.join("my_app").join("profiles").is_dir());
     assert!(nested.is_file(), "{}", nested.display());
 
     // A leading slash is harmless, the config folder is still where it starts.
